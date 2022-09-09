@@ -5,6 +5,8 @@ import mimetypes
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ldm.dream.pngwriter import PngWriter, PromptFormatter
+from ldm.dream import nsfw
+from PIL import Image
 from threading import Event
 
 def build_opt(post_data, seed, gfpgan_model_exists):
@@ -45,7 +47,7 @@ def build_opt(post_data, seed, gfpgan_model_exists):
                 broken = True
                 break
             opt.with_variations.append([seed, weight])
-    
+
     if broken:
         raise CanceledException
 
@@ -84,7 +86,7 @@ class DreamServer(BaseHTTPRequestHandler):
             self.send_header("Content-type", "application/json")
             self.end_headers()
             output = []
-            
+
             log_file = os.path.join(self.outdir, "dream_web_log.txt")
             if os.path.exists(log_file):
                 with open(log_file, "r") as log:
@@ -162,6 +164,7 @@ class DreamServer(BaseHTTPRequestHandler):
                 iter_opt.seed = seed
             normalized_prompt = PromptFormatter(self.model, iter_opt).normalize_prompt()
             path = pngwriter.save_image_and_prompt_to_png(image, f'{normalized_prompt} -S{iter_opt.seed}', name)
+            n = nsfw.check_nsfw([Image.open(path)])
 
             if int(config['seed']) == -1:
                 config['seed'] = seed
@@ -171,7 +174,7 @@ class DreamServer(BaseHTTPRequestHandler):
                     log.write(f"{path}: {json.dumps(config)}\n")
 
                 self.wfile.write(bytes(json.dumps(
-                    {'event': 'result', 'url': path, 'seed': seed, 'config': config}
+                    {'event': 'result', 'url': path, 'seed': seed, 'config': config, 'nsfw': n[0]}
                 ) + '\n',"utf-8"))
 
             # control state of the "postprocessing..." message
