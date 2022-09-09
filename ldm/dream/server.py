@@ -4,6 +4,8 @@ import mimetypes
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ldm.dream.pngwriter import PngWriter
+from ldm.dream import nsfw
+from PIL import Image
 from threading import Event
 
 class CanceledException(Exception):
@@ -100,6 +102,7 @@ class DreamServer(BaseHTTPRequestHandler):
         def image_done(image, seed, upscaled=False):
             name = f'{prefix}.{seed}.png'
             path = pngwriter.save_image_and_prompt_to_png(image, f'{prompt} -S{seed}', name)
+            n = nsfw.check_nsfw([Image.open(path)])
 
             # Append post_data to log, but only once!
             if not upscaled:
@@ -107,7 +110,7 @@ class DreamServer(BaseHTTPRequestHandler):
                     log.write(f"{path}: {json.dumps(config)}\n")
 
                 self.wfile.write(bytes(json.dumps(
-                    {'event': 'result', 'url': path, 'seed': seed, 'config': config}
+                    {'event': 'result', 'url': path, 'seed': seed, 'config': config, 'nsfw': n[0]}
                 ) + '\n',"utf-8"))
 
             # control state of the "postprocessing..." message
